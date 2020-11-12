@@ -3,6 +3,8 @@ Moloch DAO v2 with multi-summoner capabilities, plus register function for metad
 
 To get started playing with this, we recommend popping Flat_Moloch_v2.1.sol into Remix. 
 
+Kovan Deployment: 0x2e08D4813bd59fE4A37B742A4D132E5b4Fd04200
+
 Developed on top of Moloch v2 by Ross Campbell, Zephram Lou, and Bill Warren in the pursuit of Moloch mysticism. 
 
 Permission is hereby granted, free of charge, to any person obtaining
