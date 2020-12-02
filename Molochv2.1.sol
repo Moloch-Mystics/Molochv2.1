@@ -604,7 +604,11 @@ contract Moloch is ReentrancyGuard {
         // only collect if 1) there are tokens to collect 2) token is whitelisted 3) token has non-zero balance
         require(amountToCollect > 0, 'no tokens to collect');
         require(tokenWhitelist[token], 'token to collect must be whitelisted');
-        require(userTokenBalances[GUILD][token] > 0, 'token to collect must have non-zero guild bank balance');
+        require(userTokenBalances[GUILD][token] > 0 || totalGuildBankTokens < MAX_TOKEN_GUILDBANK_COUNT, 'token to collect must have non-zero guild bank balance');
+        
+        if (userTokenBalances[GUILD][token] == 0){
+            totalGuildBankTokens += 1;
+        }
         
         unsafeAddToBalance(GUILD, token, amountToCollect);
         emit TokensCollected(token, amountToCollect);
@@ -714,4 +718,104 @@ contract Moloch is ReentrancyGuard {
 
         return (balance / totalShares) * shares;
     }
+}
+
+/*
+The MIT License (MIT)
+Copyright (c) 2018 Murray Software, LLC.
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+contract CloneFactory { // implementation of eip-1167 - see https://eips.ethereum.org/EIPS/eip-1167
+    function createClone(address target) internal returns (address result) {
+        bytes20 targetBytes = bytes20(target);
+        assembly {
+            let clone := mload(0x40)
+            mstore(clone, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(add(clone, 0x14), targetBytes)
+            mstore(add(clone, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+            result := create(0, clone, 0x37)
+        }
+    }
+}
+
+contract MolochSummoner is CloneFactory { 
+    
+    address public template;
+    mapping (address => bool) public daos;
+    uint daoIdx = 0;
+    Moloch private moloch; // moloch contract
+    
+    constructor(address _template) public {
+        template = _template;
+    }
+    
+    event SummonComplete(address indexed moloch, address[] summoner, address[] tokens, uint256 summoningTime, uint256 periodDuration, uint256 votingPeriodLength, uint256 gracePeriodLength, uint256 proposalDeposit, uint256 dilutionBound, uint256 processingReward, uint256[] summonerShares);
+    event Register(uint daoIdx, address moloch, string title, string http, uint version);
+     
+    function summonMoloch(
+        address[] memory _summoner,
+        address[] memory _approvedTokens,
+        uint256 _periodDuration,
+        uint256 _votingPeriodLength,
+        uint256 _gracePeriodLength,
+        uint256 _proposalDeposit,
+        uint256 _dilutionBound,
+        uint256 _processingReward,
+        uint256[] memory _summonerShares
+    ) public returns (address) {
+        Moloch moloch = Moloch(createClone(template));
+        
+        moloch.init(
+            _summoner,
+            _approvedTokens,
+            _periodDuration,
+            _votingPeriodLength,
+            _gracePeriodLength,
+            _proposalDeposit,
+            _dilutionBound,
+            _processingReward,
+            _summonerShares
+        );
+       
+        emit SummonComplete(address(moloch), _summoner, _approvedTokens, now, _periodDuration, _votingPeriodLength, _gracePeriodLength, _proposalDeposit, _dilutionBound, _processingReward, _summonerShares);
+        
+        return address(moloch);
+    }
+    
+    function registerDao(
+        address _daoAdress,
+        string memory _daoTitle,
+        string memory _http,
+        uint _version
+      ) public returns (bool) {
+          
+      moloch = Moloch(_daoAdress);
+      (,,,bool exists,,) = moloch.members(msg.sender);
+    
+      require(exists == true, "must be a member");
+      require(daos[_daoAdress] == false, "dao metadata already registered");
+
+      daos[_daoAdress] = true;
+      
+      daoIdx = daoIdx + 1;
+      emit Register(daoIdx, _daoAdress, _daoTitle, _http, _version);
+      return true;
+      
+    }
+    
 }

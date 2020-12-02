@@ -711,7 +711,11 @@ contract Moloch is ReentrancyGuard {
         // only collect if 1) there are tokens to collect 2) token is whitelisted 3) token has non-zero balance
         require(amountToCollect > 0, 'no tokens to collect');
         require(tokenWhitelist[token], 'token to collect must be whitelisted');
-        require(userTokenBalances[GUILD][token] > 0, 'token to collect must have non-zero guild bank balance');
+        require(userTokenBalances[GUILD][token] > 0 || totalGuildBankTokens < MAX_TOKEN_GUILDBANK_COUNT, 'token to collect must have non-zero guild bank balance');
+        
+        if (userTokenBalances[GUILD][token] == 0){
+            totalGuildBankTokens += 1;
+        }
         
         unsafeAddToBalance(GUILD, token, amountToCollect);
         emit TokensCollected(token, amountToCollect);
@@ -881,9 +885,9 @@ contract MolochSummoner is CloneFactory {
         uint256 _processingReward,
         uint256[] memory _summonerShares
     ) public returns (address) {
-        Moloch baal = Moloch(createClone(template));
+        Moloch moloch = Moloch(createClone(template));
         
-        baal.init(
+        moloch.init(
             _summoner,
             _approvedTokens,
             _periodDuration,
@@ -895,9 +899,9 @@ contract MolochSummoner is CloneFactory {
             _summonerShares
         );
        
-        emit SummonComplete(address(baal), _summoner, _approvedTokens, now, _periodDuration, _votingPeriodLength, _gracePeriodLength, _proposalDeposit, _dilutionBound, _processingReward, _summonerShares);
+        emit SummonComplete(address(moloch), _summoner, _approvedTokens, now, _periodDuration, _votingPeriodLength, _gracePeriodLength, _proposalDeposit, _dilutionBound, _processingReward, _summonerShares);
         
-        return address(baal);
+        return address(moloch);
     }
     
     function registerDao(
