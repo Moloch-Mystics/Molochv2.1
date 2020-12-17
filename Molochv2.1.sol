@@ -104,6 +104,8 @@ contract Moloch is ReentrancyGuard {
 
     mapping(address => Member) public members;
     mapping(address => address) public memberAddressByDelegateKey;
+    address[] public memberList;
+
 
     mapping(uint256 => Proposal) public proposals;
 
