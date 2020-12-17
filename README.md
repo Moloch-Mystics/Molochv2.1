@@ -1,9 +1,17 @@
 # Molochv2.1
-Moloch DAO v2 with multi-summoner capabilities, plus register function for metadata. Summoner uses EIP-1167 proxy pattern to decrease gas costs significantly w/r to moloch v2 summoning. 
+Moloch DAO v2 with multi-summoner capabilities, plus register function for metadata. Summoner uses EIP-1167 proxy pattern to decrease gas costs significantly w/r to moloch v2 summoning.
 
 To get started playing with this, we recommend popping Flat_Moloch_v2.1.sol into Remix. 
 
-Kovan Deployment: 0x2e08D4813bd59fE4A37B742A4D132E5b4Fd04200
+## Deployments
+
+Kovan Deployment: 0x9c5d087f912e7187D9c75e90999b03FB31Ee17f5
+
+xDAI Deployment: 0x0F50B2F3165db96614fbB6E4262716acc9F9e098
+
+Rinkeby Deployment: 0xf260Dc2F7f35D9687621E53510385A3342573d30
+
+## License
 
 Developed on top of Moloch v2 by Ross Campbell, Zephram Lou, and Bill Warren in the pursuit of Moloch mysticism. 
 
@@ -25,3 +33,4 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
