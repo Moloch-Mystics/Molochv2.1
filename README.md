@@ -11,6 +11,8 @@ xDAI Deployment: 0x0F50B2F3165db96614fbB6E4262716acc9F9e098
 
 Rinkeby Deployment: 0xf260Dc2F7f35D9687621E53510385A3342573d30
 
+Mainnet Deployment: 0x38064F40B20347d58b326E767791A6f79cdEddCe
+
 ## License
 
 Developed on top of Moloch v2 by Ross Campbell, Zephram Lou, and Bill Warren in the pursuit of Moloch mysticism. 
