@@ -562,7 +562,7 @@ contract Moloch is ReentrancyGuard {
             }
         }
 
-        emit Ragequit(msg.sender, sharesToBurn, lootToBurn);
+        emit Ragequit(memberAddress, sharesToBurn, lootToBurn);
     }
 
     function ragekick(address memberToKick) public nonReentrant {
