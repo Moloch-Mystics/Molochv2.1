@@ -105,8 +105,6 @@ contract Moloch is ReentrancyGuard {
 
     mapping(address => Member) public members;
     mapping(address => address) public memberAddressByDelegateKey;
-    address[] public memberList;
-
 
     mapping(uint256 => Proposal) public proposals;
 
@@ -145,7 +143,7 @@ contract Moloch is ReentrancyGuard {
         members[applicant].loot = members[applicant].loot.sub(lootToBurn);
         totalShares = totalShares.sub(sharesToBurn);
         totalLoot = totalLoot.sub(lootToBurn);
-        Shaman(applicant, sharesToBurn, lootToBurn, true)
+        Shaman(applicant, sharesToBurn, lootToBurn, true);
     }
 
     function _mintSharesLoot(address applicant, uint256 sharesRequested, uint256 lootRequested) internal {
@@ -171,7 +169,7 @@ contract Moloch is ReentrancyGuard {
         }
         totalShares = totalShares.add(sharesRequested);
         totalLoot = totalLoot.add(lootRequested);
-        Shaman(applicant, sharesRequested, lootRequested, false)
+        Shaman(applicant, sharesRequested, lootRequested, false);
 
     }
 
@@ -732,17 +730,17 @@ contract Moloch is ReentrancyGuard {
         unsafeAddToBalance(to, token, amount);
     }
 
-    function fairShare(uint256 balance, uint256 shares, uint256 totalShares) internal pure returns (uint256) {
-        require(totalShares != 0);
+    function fairShare(uint256 balance, uint256 shares, uint256 _totalShares) internal pure returns (uint256) {
+        require(_totalShares != 0);
 
         if (balance == 0) { return 0; }
 
         uint256 prod = balance * shares;
 
         if (prod / balance == shares) { // no overflow in multiplication above?
-            return prod / totalShares;
+            return prod / _totalShares;
         }
 
-        return (balance / totalShares) * shares;
+        return (balance / _totalShares) * shares;
     }
 }
