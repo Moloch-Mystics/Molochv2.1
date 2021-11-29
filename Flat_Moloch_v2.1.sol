@@ -150,6 +150,7 @@ contract Moloch is ReentrancyGuard {
     event ProcessWhitelistProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
     event ProcessGuildKickProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
     event Ragequit(address indexed memberAddress, uint256 sharesToBurn, uint256 lootToBurn);
+    event Shaman(address indexed memberAddress, uint256 shares, uint256 loot, bool burn);
     event TokensCollected(address indexed token, uint256 amountToCollect);
     event CancelProposal(uint256 indexed proposalId, address applicantAddress);
     event UpdateDelegateKey(address indexed memberAddress, address newDelegateKey);
@@ -233,7 +234,53 @@ contract Moloch is ReentrancyGuard {
         _;
     }
 
-    function init(
+    modifier onlyShaman {
+        require(tokenWhitelist[msg.sender], "not a shaman");
+        _;
+    }
+
+    function burnSharesLoot(address memberAddress, uint256 sharesToBurn, uint256 lootToBurn) public onlyShaman {
+        _burnSharesLoot(memberAddress, sharesToBurn, lootToBurn);
+    }
+
+    function mintSharesLoot(address applicant, uint256 sharesRequested, uint256 lootRequested) public onlyShaman {
+            _mintSharesLoot(applicant, sharesRequested, lootRequested);
+    }
+
+    function _burnSharesLoot(address memberAddress, uint256 sharesToBurn, uint256 lootToBurn) internal {
+        members[memberAddress].shares = members[memberAddress].shares.sub(sharesToBurn);
+        members[memberAddress].loot = members[memberAddress].loot.sub(lootToBurn);
+        totalShares = totalShares.sub(sharesToBurn);
+        totalLoot = totalLoot.sub(lootToBurn);
+        Shaman(applicant, sharesToBurn, lootToBurn, true)
+    }
+
+    function _mintSharesLoot(address applicant, uint256 sharesRequested, uint256 lootRequested) internal {
+        require(totalShares.add(sharesRequested).add(lootRequested) <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
+        
+
+        if (members[applicant].exists) {
+            members[applicant].shares = members[applicant].shares.add(sharesRequested);
+            members[applicant].loot = members[applicant].loot.add(lootRequested);
+
+            // the applicant is a new member, create a new record for them
+        } else {
+                // if the applicant address is already taken by a member's delegateKey, reset it to their member address
+            if (members[memberAddressByDelegateKey[applicant]].exists) {
+                address memberToOverride = memberAddressByDelegateKey[applicant];
+                memberAddressByDelegateKey[memberToOverride] = memberToOverride;
+                members[memberToOverride].delegateKey = memberToOverride;
+            }
+
+                // use applicant address as delegateKey by default
+            members[applicant] = Member(applicant, sharesRequested, lootRequested, true, 0, 0);
+            memberAddressByDelegateKey[applicant] = applicant;
+        }
+        totalShares = totalShares.add(sharesRequested);
+        totalLoot = totalLoot.add(lootRequested);
+        Shaman(applicant, sharesRequested, lootRequested, false)
+
+    }    function init(
         address[] calldata _summoner,
         address[] calldata _approvedTokens,
         uint256 _periodDuration,
@@ -497,28 +544,7 @@ contract Moloch is ReentrancyGuard {
         if (didPass) {
             proposal.flags[2] = true; // didPass
 
-            // if the applicant is already a member, add to their existing shares & loot
-            if (members[proposal.applicant].exists) {
-                members[proposal.applicant].shares = members[proposal.applicant].shares.add(proposal.sharesRequested);
-                members[proposal.applicant].loot = members[proposal.applicant].loot.add(proposal.lootRequested);
-
-            // the applicant is a new member, create a new record for them
-            } else {
-                // if the applicant address is already taken by a member's delegateKey, reset it to their member address
-                if (members[memberAddressByDelegateKey[proposal.applicant]].exists) {
-                    address memberToOverride = memberAddressByDelegateKey[proposal.applicant];
-                    memberAddressByDelegateKey[memberToOverride] = memberToOverride;
-                    members[memberToOverride].delegateKey = memberToOverride;
-                }
-
-                // use applicant address as delegateKey by default
-                members[proposal.applicant] = Member(proposal.applicant, proposal.sharesRequested, proposal.lootRequested, true, 0, 0);
-                memberAddressByDelegateKey[proposal.applicant] = proposal.applicant;
-            }
-
-            // mint new shares & loot
-            totalShares = totalShares.add(proposal.sharesRequested);
-            totalLoot = totalLoot.add(proposal.lootRequested);
+            _mintSharesLoot(proposal.applicant, proposal.sharesRequested, proposal.lootRequested);
 
             // if the proposal tribute is the first tokens of its kind to make it into the guild bank, increment total guild bank tokens
             if (userTokenBalances[GUILD][proposal.tributeToken] == 0 && proposal.tributeOffered > 0) {
@@ -605,7 +631,7 @@ contract Moloch is ReentrancyGuard {
         emit ProcessGuildKickProposal(proposalIndex, proposalId, didPass);
     }
 
-    function _didPass(uint256 proposalIndex) internal returns (bool didPass) {
+    function _didPass(uint256 proposalIndex) internal view returns (bool didPass) {
         Proposal memory proposal = proposals[proposalQueue[proposalIndex]];
 
         didPass = proposal.yesVotes > proposal.noVotes;
@@ -656,10 +682,8 @@ contract Moloch is ReentrancyGuard {
         uint256 sharesAndLootToBurn = sharesToBurn.add(lootToBurn);
 
         // burn shares and loot
-        member.shares = member.shares.sub(sharesToBurn);
-        member.loot = member.loot.sub(lootToBurn);
-        totalShares = totalShares.sub(sharesToBurn);
-        totalLoot = totalLoot.sub(lootToBurn);
+                // burn shares and loot
+        _burnSharesLoot(memberAddress,sharesToBurn, lootToBurn);
 
         for (uint256 i = 0; i < approvedTokens.length; i++) {
             uint256 amountToRagequit = fairShare(userTokenBalances[GUILD][approvedTokens[i]], sharesAndLootToBurn, initialTotalSharesAndLoot);
@@ -867,7 +891,7 @@ contract MolochSummoner is CloneFactory {
     address public template;
     mapping (address => bool) public daos;
     uint daoIdx = 0;
-    Moloch private moloch; // moloch contract
+    // Moloch private moloch; // moloch contract
     
     constructor(address _template) public {
         template = _template;
@@ -913,7 +937,7 @@ contract MolochSummoner is CloneFactory {
         uint _version
       ) public returns (bool) {
           
-      moloch = Moloch(_daoAdress);
+      Moloch moloch = Moloch(_daoAdress);
       (,,,bool exists,,) = moloch.members(msg.sender);
     
       require(exists == true, "must be a member");
@@ -928,3 +952,4 @@ contract MolochSummoner is CloneFactory {
     }
     
 }
+
