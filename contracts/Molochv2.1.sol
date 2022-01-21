@@ -5,7 +5,11 @@ import "./oz/IERC20.sol";
 import "./oz/SafeMath.sol";
 import "./oz/ReentrancyGuard.sol";
 
-contract Moloch is ReentrancyGuard {
+interface IEIP_TBD {
+    function daoURI() external view returns (string memory); 
+}
+
+contract Moloch is ReentrancyGuard, IEIP_TBD {
     using SafeMath for uint256;
 
     /***************
@@ -36,11 +40,12 @@ contract Moloch is ReentrancyGuard {
     // EVENTS
     // ***************
     event SummonComplete(address indexed summoner, address[] tokens, uint256 summoningTime, uint256 periodDuration, uint256 votingPeriodLength, uint256 gracePeriodLength, uint256 proposalDeposit, uint256 dilutionBound, uint256 processingReward);
-    event SubmitProposal(address indexed applicant, uint256 sharesRequested, uint256 lootRequested, uint256 tributeOffered, address tributeToken, uint256 paymentRequested, address paymentToken, string details, bool[6] flags, uint256 proposalId, address indexed delegateKey, address indexed memberAddress);
+    event SubmitProposal(address indexed applicant, uint256 sharesRequested, uint256 lootRequested, uint256 tributeOffered, address tributeToken, uint256 paymentRequested, address paymentToken, string details, bool[7] flags, uint256 proposalId, address indexed delegateKey, address indexed memberAddress);
     event SponsorProposal(address indexed delegateKey, address indexed memberAddress, uint256 proposalId, uint256 proposalIndex, uint256 startingPeriod);
     event SubmitVote(uint256 proposalId, uint256 indexed proposalIndex, address indexed delegateKey, address indexed memberAddress, uint8 uintVote);
     event ProcessProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
     event ProcessWhitelistProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
+    event ProcessUriProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
     event ProcessGuildKickProposal(uint256 indexed proposalIndex, uint256 indexed proposalId, bool didPass);
     event Ragequit(address indexed memberAddress, uint256 sharesToBurn, uint256 lootToBurn);
     event TokensCollected(address indexed token, uint256 amountToCollect);
@@ -90,7 +95,7 @@ contract Moloch is ReentrancyGuard {
         uint256 startingPeriod; // the period in which voting can start for this proposal
         uint256 yesVotes; // the total number of YES votes for this proposal
         uint256 noVotes; // the total number of NO votes for this proposal
-        bool[6] flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick]
+        bool[7] flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick, uri]
         string details; // proposal details - could be IPFS hash, plaintext, or JSON
         uint256 maxTotalSharesAndLootAtYesVote; // the maximum # of total shares encountered at a yes vote on this proposal
         mapping(address => Vote) votesByMember; // the votes on this proposal by each member
@@ -106,6 +111,8 @@ contract Moloch is ReentrancyGuard {
     mapping(address => address) public memberAddressByDelegateKey;
 
     mapping(uint256 => Proposal) public proposals;
+    
+    string private _daoURI;
 
     uint256[] public proposalQueue;
 
@@ -203,7 +210,7 @@ contract Moloch is ReentrancyGuard {
         require(IERC20(tributeToken).transferFrom(msg.sender, address(this), tributeOffered), "tribute token transfer failed");
         unsafeAddToBalance(ESCROW, tributeToken, tributeOffered);
 
-        bool[6] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick]
+        bool[7] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick, uri]
 
         _submitProposal(applicant, sharesRequested, lootRequested, tributeOffered, tributeToken, paymentRequested, paymentToken, details, flags);
         return proposalCount - 1; // return proposalId - contracts calling submit might want it
@@ -214,10 +221,19 @@ contract Moloch is ReentrancyGuard {
         require(!tokenWhitelist[tokenToWhitelist], "cannot already have whitelisted the token");
         require(approvedTokens.length < MAX_TOKEN_WHITELIST_COUNT, "cannot submit more whitelist proposals");
 
-        bool[6] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick]
+        bool[7] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick, uri]
         flags[4] = true; // whitelist
 
         _submitProposal(address(0), 0, 0, 0, tokenToWhitelist, 0, address(0), details, flags);
+        return proposalCount - 1;
+    }
+
+    function submitUriProposal(string memory newURI) public nonReentrant returns (uint256 proposalId) {
+
+        bool[7] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick, uri]
+        flags[6] = true; // uri
+
+        _submitProposal(address(0), 0, 0, 0, address(0), 0, address(0), newURI, flags);
         return proposalCount - 1;
     }
 
@@ -227,7 +243,7 @@ contract Moloch is ReentrancyGuard {
         require(member.shares > 0 || member.loot > 0, "member must have at least one share or one loot");
         require(members[memberToKick].jailed == 0, "member must not already be jailed");
 
-        bool[6] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick]
+        bool[7] memory flags; // [sponsored, processed, didPass, cancelled, whitelist, guildkick, uri]
         flags[5] = true; // guild kick
 
         _submitProposal(memberToKick, 0, 0, 0, address(0), 0, address(0), details, flags);
@@ -243,7 +259,7 @@ contract Moloch is ReentrancyGuard {
         uint256 paymentRequested,
         address paymentToken,
         string memory details,
-        bool[6] memory flags
+        bool[7] memory flags
     ) internal {
         Proposal memory proposal = Proposal({
             applicant : applicant,
@@ -465,6 +481,30 @@ contract Moloch is ReentrancyGuard {
         emit ProcessWhitelistProposal(proposalIndex, proposalId, didPass);
     }
 
+    function processUriProposal(uint256 proposalIndex) public nonReentrant {
+        _validateProposalForProcessing(proposalIndex);
+
+        uint256 proposalId = proposalQueue[proposalIndex];
+        Proposal storage proposal = proposals[proposalId];
+
+        require(proposal.flags[6], "must be a uri proposal");
+
+        proposal.flags[1] = true; // processed
+
+        bool didPass = _didPass(proposalIndex);
+
+        if (didPass) {
+            proposal.flags[2] = true; // didPass
+
+            _daoURI = proposal.details;
+        }
+
+        _returnDeposit(proposal.sponsor);
+
+        emit ProcessUriProposal(proposalIndex, proposalId, didPass);
+    }
+
+
     function processGuildKickProposal(uint256 proposalIndex) public nonReentrant {
         _validateProposalForProcessing(proposalIndex);
 
@@ -669,7 +709,7 @@ contract Moloch is ReentrancyGuard {
         return proposalQueue.length;
     }
 
-    function getProposalFlags(uint256 proposalId) public view returns (bool[6] memory) {
+    function getProposalFlags(uint256 proposalId) public view returns (bool[7] memory) {
         return proposals[proposalId].flags;
     }
 
@@ -685,6 +725,10 @@ contract Moloch is ReentrancyGuard {
 
     function getTokenCount() public view returns (uint256) {
         return approvedTokens.length;
+    }
+    
+    function daoURI() public view returns (string memory) {
+        return _daoURI;
     }
 
     /***************
